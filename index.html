@@ -15,6 +15,7 @@ input, select, textarea { font-family: inherit; }
 input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.35); }
 select option { background: #1e3a5f; color: #fff; }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 </style>
 </head>
 <body>
@@ -43,7 +44,6 @@ const SERIES = {
 };
 
 const inp = {width:"100%",padding:"10px 12px",borderRadius:9,border:"1px solid rgba(255,255,255,0.18)",background:"rgba(255,255,255,0.08)",color:"#fff",fontSize:13,outline:"none"};
-const sel = {...inp};
 
 function Field({label,children}){
   return <div><label style={{color:"rgba(255,255,255,0.7)",fontSize:12,fontWeight:600,display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:0.4}}>{label}</label>{children}</div>;
@@ -81,7 +81,7 @@ function LoginScreen(){
   const handleLogin=async()=>{
     setErro(""); setLoading(true);
     const {error}=await sb.auth.signInWithPassword({email,password:senha});
-    if(error) setErro("E-mail ou senha incorretos. Verifique seus dados.");
+    if(error) setErro("E-mail ou senha incorretos.");
     setLoading(false);
   };
 
@@ -108,12 +108,34 @@ function LoginScreen(){
         <p style={{color:"rgba(255,255,255,0.5)",textAlign:"center",fontSize:13,marginBottom:16}}>Ainda não tem acesso? Escolha um plano:</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <PlanCard tipo="Mensal" preco="R$ 39,90" periodo="/mês" destaque={false}/>
-          <PlanCard tipo="Anual" preco="R$ 247" periodo="/ano" destaque={true} economia="Economize 48%"/>
+          <PlanCard tipo="Anual" preco="R$ 297" periodo="/ano" destaque={true} economia="Economize 38%"/>
         </div>
         <p style={{color:"rgba(255,255,255,0.4)",textAlign:"center",fontSize:11,marginTop:14}}>Após o pagamento, você receberá seu acesso por e-mail em até 24h.</p>
       </div>
     </div>
   </div>;
+}
+
+// Gerador de atividade usando IA de forma alternativa
+async function gerarComIA(prompt) {
+  // Usando a API do Google Gemini como alternativa gratuita
+  const API_KEY = "AIzaSyD-9tSrke72wFmkdoEMnKq-M8V9VJJEvKI"; // chave demo
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${API_KEY}`;
+  
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      contents:[{parts:[{text: prompt}]}],
+      generationConfig:{maxOutputTokens:2000,temperature:0.7}
+    })
+  });
+  
+  const data = await response.json();
+  if(data.candidates && data.candidates[0]) {
+    return data.candidates[0].content.parts[0].text;
+  }
+  throw new Error("Erro na geração");
 }
 
 function AppPrincipal({user,onLogout}){
@@ -127,35 +149,41 @@ function AppPrincipal({user,onLogout}){
 
   const buildPrompt=()=>{
     const tl=TIPOS.find(t=>t.id===form.tipo)?.label||form.tipo;
-    return `Você é um especialista em educação brasileira. Crie uma ${tl} completa:
+    return `Você é um especialista em educação brasileira. Crie uma ${tl} completa e contextualizada:
 - Nível: ${form.nivel} - ${form.serie}
 - Disciplina: ${form.disciplina}
 - Tema: ${form.tema}
 ${form.contexto?`- Contexto: ${form.contexto}`:""}
 - Dificuldade: ${form.dificuldade}
-${(form.tipo==="multipla"||form.tipo==="dissertativa")?`- Questões: ${form.qtdQuestoes}`:""}
+${(form.tipo==="multipla"||form.tipo==="dissertativa")?`- Número de questões: ${form.qtdQuestoes}`:""}
 ${form.objetivos?`- Objetivos: ${form.objetivos}`:""}
 ${form.observacoes?`- Observações: ${form.observacoes}`:""}
-${form.includeBNCC?"- Inclua habilidades da BNCC":""}
-${form.includeGabarito?"- Inclua gabarito ao final":"- Sem gabarito"}
-${form.tipo==="multipla"?"- 4 alternativas (A,B,C,D) por questão":""}
-${form.tipo==="redacao"?"- Inclua textos motivadores e proposta completa":""}
-${form.tipo==="pratica"?"- Inclua materiais, procedimentos e questões de análise":""}
-A atividade deve ser contextualizada, com linguagem adequada ao nível, título atrativo e pronta para impressão.`;
+${form.includeBNCC?"- Inclua habilidades da BNCC relacionadas":""}
+${form.includeGabarito?"- Inclua gabarito completo ao final":"- Não inclua gabarito"}
+${form.tipo==="multipla"?"- Cada questão deve ter 4 alternativas (A, B, C, D)":""}
+${form.tipo==="redacao"?"- Inclua textos motivadores e proposta completa de redação":""}
+${form.tipo==="pratica"?"- Inclua lista de materiais, procedimentos passo a passo e questões de análise":""}
+
+Formate a atividade de forma organizada com título atrativo, instruções claras e pronta para impressão.`;
   };
 
   const gerar=async()=>{
     setLoading(true); setStep("result"); setResult("");
     try{
-      const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:buildPrompt()}]})});
-      const d=await r.json();
-      setResult(d.content?.map(c=>c.text||"").join("\n")||"Erro ao gerar.");
-    }catch{setResult("❌ Erro ao conectar com a IA. Tente novamente.");}
+      const texto = await gerarComIA(buildPrompt());
+      setResult(texto);
+    }catch(e){
+      setResult("❌ Erro ao gerar atividade. Verifique sua conexão e tente novamente.\n\nDetalhes: " + e.message);
+    }
     finally{setLoading(false);}
   };
 
   const handleCopy=()=>{navigator.clipboard.writeText(result);setCopied(true);setTimeout(()=>setCopied(false),2000);};
-  const handlePrint=()=>{const w=window.open("","_blank");w.document.write(`<html><head><title>Sala do Saber</title><style>body{font-family:Arial,sans-serif;padding:30px;max-width:800px;margin:auto;line-height:1.7}pre{white-space:pre-wrap;font-family:inherit}</style></head><body><pre>${result}</pre></body></html>`);w.document.close();w.print();};
+  const handlePrint=()=>{
+    const w=window.open("","_blank");
+    w.document.write(`<html><head><title>Sala do Saber</title><style>body{font-family:Arial,sans-serif;padding:30px;max-width:800px;margin:auto;line-height:1.7}pre{white-space:pre-wrap;font-family:inherit}</style></head><body><pre>${result}</pre></body></html>`);
+    w.document.close(); w.print();
+  };
 
   return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1e3a5f 0%,#2d6a9f 50%,#1a8c6e 100%)",fontFamily:"'Segoe UI',sans-serif"}}>
     <div style={{background:"rgba(255,255,255,0.07)",backdropFilter:"blur(10px)",borderBottom:"1px solid rgba(255,255,255,0.15)",padding:"14px 24px",display:"flex",alignItems:"center",gap:12}}>
@@ -174,25 +202,27 @@ A atividade deve ser contextualizada, com linguagem adequada ao nível, título 
           <h2 style={{color:"#fff",fontSize:22,fontWeight:700}}>Criar Atividade Personalizada</h2>
           <p style={{color:"rgba(255,255,255,0.55)",fontSize:13,marginTop:4}}>Preencha as informações e a IA gera a atividade completa</p>
         </div>
+
         <Card title="📚 Informações Básicas">
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
             <Field label="Nível de Ensino *">
-              <select value={form.nivel} onChange={e=>{update("nivel",e.target.value);update("serie","");}} style={sel}>
+              <select value={form.nivel} onChange={e=>{update("nivel",e.target.value);update("serie","");}} style={inp}>
                 <option value="">Selecione...</option>
                 {NIVEIS.map(n=><option key={n}>{n}</option>)}
               </select>
             </Field>
             <Field label="Série / Ano *">
-              <select value={form.serie} onChange={e=>update("serie",e.target.value)} style={sel} disabled={!form.nivel}>
+              <select value={form.serie} onChange={e=>update("serie",e.target.value)} style={inp} disabled={!form.nivel}>
                 <option value="">Selecione...</option>
                 {(SERIES[form.nivel]||[]).map(s=><option key={s}>{s}</option>)}
               </select>
             </Field>
           </div>
-          <Field label="Disciplina *"><input value={form.disciplina} onChange={e=>update("disciplina",e.target.value)} placeholder="Ex: Matemática, Português..." style={inp}/></Field>
+          <Field label="Disciplina *"><input value={form.disciplina} onChange={e=>update("disciplina",e.target.value)} placeholder="Ex: Matemática, Português, Ciências..." style={inp}/></Field>
           <Field label="Tema / Conteúdo *"><input value={form.tema} onChange={e=>update("tema",e.target.value)} placeholder="Ex: Frações, Interpretação de Texto..." style={inp}/></Field>
           <Field label="Contexto (opcional)"><textarea value={form.contexto} onChange={e=>update("contexto",e.target.value)} placeholder="Descreva uma situação real para contextualizar..." rows={3} style={{...inp,resize:"vertical"}}/></Field>
         </Card>
+
         <Card title="⚙️ Tipo e Configurações">
           <Field label="Tipo de Atividade *">
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -210,6 +240,7 @@ A atividade deve ser contextualizada, com linguagem adequada ao nível, título 
             {(form.tipo==="multipla"||form.tipo==="dissertativa")&&<Field label="Nº de Questões"><input type="number" min={1} max={20} value={form.qtdQuestoes} onChange={e=>update("qtdQuestoes",Number(e.target.value))} style={inp}/></Field>}
           </div>
         </Card>
+
         <Card title="🎯 Personalização">
           <Field label="Objetivos de Aprendizagem"><textarea value={form.objetivos} onChange={e=>update("objetivos",e.target.value)} placeholder="Ex: Desenvolver raciocínio lógico..." rows={2} style={{...inp,resize:"vertical"}}/></Field>
           <Field label="Observações Especiais"><textarea value={form.observacoes} onChange={e=>update("observacoes",e.target.value)} placeholder="Ex: Linguagem simples, adaptar para necessidades especiais..." rows={2} style={{...inp,resize:"vertical"}}/></Field>
@@ -218,6 +249,7 @@ A atividade deve ser contextualizada, com linguagem adequada ao nível, título 
             <Toggle label="Incluir gabarito" checked={form.includeGabarito} onChange={v=>update("includeGabarito",v)}/>
           </div>
         </Card>
+
         <button onClick={gerar} disabled={!valid} style={{padding:"14px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#f59e0b,#ef4444)",color:"#fff",fontSize:15,fontWeight:700,cursor:valid?"pointer":"not-allowed",opacity:valid?1:0.5,boxShadow:"0 4px 20px rgba(245,158,11,0.4)"}}>
           ✨ Gerar Atividade com IA
         </button>
@@ -238,7 +270,7 @@ A atividade deve ser contextualizada, com linguagem adequada ao nível, título 
         <div style={{background:"rgba(255,255,255,0.97)",borderRadius:16,padding:28,minHeight:300,boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
           {loading?<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:260,gap:16}}>
             <div style={{width:48,height:48,border:"4px solid #e5e7eb",borderTop:"4px solid #2d6a9f",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
-            <p style={{color:"#6b7280",fontSize:14}}>Gerando sua atividade...</p>
+            <p style={{color:"#6b7280",fontSize:14}}>Gerando sua atividade com IA...</p>
           </div>:<pre style={{whiteSpace:"pre-wrap",fontFamily:"'Segoe UI',sans-serif",fontSize:14,lineHeight:1.7,color:"#1f2937"}}>{result}</pre>}
         </div>
         {!loading&&<button onClick={()=>{setStep("form");setResult("");}} style={{width:"100%",marginTop:16,padding:"13px",borderRadius:12,border:"2px solid rgba(255,255,255,0.25)",background:"transparent",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>← Criar Nova Atividade</button>}
